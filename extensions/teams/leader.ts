@@ -433,7 +433,12 @@ export function runLeader(pi: ExtensionAPI): void {
 	const debouncedWidgetEnabled = process.env.PI_TEAMS_DEBOUNCED_WIDGET === "1";
 	const renderWidgetNow = () => {
 		if (!currentCtx || widgetSuppressed) return;
-		currentCtx.ui.setWidget("pi-teams", widgetFactory);
+		try {
+			currentCtx.ui.setWidget("pi-teams", widgetFactory);
+		} catch (e: any) {
+			if (e.message?.includes("stale")) return;
+			throw e;
+		}
 	};
 	const debouncedRenderWidget = createDebouncedTrigger(renderWidgetNow, debouncedWidgetDelayMs);
 
@@ -739,7 +744,7 @@ export function runLeader(pi: ExtensionAPI): void {
 	const startRefreshLoop = (ctx: ExtensionContext) => {
 		refreshIdleStreak = 0;
 		const run = async () => {
-			if (isStopping) {
+			if (isStopping || ctx !== currentCtx) {
 				refreshTimer = null;
 				return;
 			}
@@ -756,7 +761,7 @@ export function runLeader(pi: ExtensionAPI): void {
 						await refreshTasks();
 						changed = true;
 					}
-					if (changed) renderWidget();
+					if (changed && ctx === currentCtx) renderWidget();
 				} finally {
 					refreshInFlight = false;
 				}
@@ -773,10 +778,10 @@ export function runLeader(pi: ExtensionAPI): void {
 		refreshTimer = setTimeout(run, getLeaderRefreshPollDelayMs({ env: process.env, idleStreak: 0, hasActiveTeamWork: true }));
 	};
 
-	const startInboxLoop = () => {
+	const startInboxLoop = (_ctx: ExtensionContext) => {
 		inboxIdleStreak = 0;
 		const run = async () => {
-			if (isStopping) {
+			if (isStopping || _ctx !== currentCtx) {
 				inboxTimer = null;
 				return;
 			}
@@ -811,6 +816,7 @@ export function runLeader(pi: ExtensionAPI): void {
 	});
 
 	pi.on("session_start", async (_event, ctx) => {
+		stopLoops();
 		currentCtx = ctx;
 		currentTeamId = currentCtx.sessionManager.getSessionId();
 		// Keep the task list aligned with the active session. If you want a shared namespace,
@@ -831,9 +837,8 @@ export function runLeader(pi: ExtensionAPI): void {
 		await refreshTasks();
 		renderWidget();
 
-		stopLoops();
 		startRefreshLoop(ctx);
-		startInboxLoop();
+		startInboxLoop(ctx);
 	});
 
 	pi.on("session_switch", async (_event, ctx) => {
@@ -865,7 +870,7 @@ export function runLeader(pi: ExtensionAPI): void {
 
 		// Restart background refresh/poll loops for the new session.
 		startRefreshLoop(ctx);
-		startInboxLoop();
+		startInboxLoop(ctx);
 	});
 
 	pi.on("session_shutdown", async () => {
