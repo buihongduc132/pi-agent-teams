@@ -115,7 +115,7 @@ export function spawnTeamsWorkerRpc(opts: {
 		"--session-dir",
 		sessionsDir,
 		...getPiTestModelArgs(mergedEnv),
-		"--no-extensions",
+		"--no-skills",
 		"-e",
 		entryPath,
 		"--append-system-prompt",

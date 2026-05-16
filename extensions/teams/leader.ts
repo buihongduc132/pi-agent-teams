@@ -577,7 +577,11 @@ export function runLeader(pi: ExtensionAPI): void {
 			void setMemberStatus(teamDir, name, "offline", { meta: { exitCode: code ?? undefined } });
 		});
 
-		const builtInToolSet = new Set(["read", "bash", "edit", "write", "grep", "find", "ls"]);
+		const builtInToolSet = new Set([
+			"read", "bash", "edit", "write", "grep", "find", "ls",
+			// MCP tools: Hindsight (via pi-mcp-adapter + mcp-hub)
+			"hindsight_search", "hindsight_context", "hindsight_retain", "hindsight_bank_profile",
+		]);
 		const tools = (pi.getActiveTools() ?? []).filter((t) => builtInToolSet.has(t));
 		const argsForChild: string[] = [];
 		if (sessionFile) argsForChild.push("--session", sessionFile);
@@ -591,9 +595,11 @@ export function runLeader(pi: ExtensionAPI): void {
 		}
 		argsForChild.push("--thinking", thinkingLevel);
 
+		// Keep --no-skills for worker isolation, but allow extensions (pi-mcp-adapter)
+		// so MCP tools are available. Teams entry is loaded via -e alongside other extensions.
 		const teamsEntry = getTeamsExtensionEntryPath();
 		if (teamsEntry) {
-			argsForChild.push("--no-extensions", "-e", teamsEntry);
+			argsForChild.push("--no-skills", "-e", teamsEntry);
 		}
 
 		const strings = getTeamsStrings(style);

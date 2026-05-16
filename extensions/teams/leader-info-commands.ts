@@ -12,7 +12,7 @@ function powerShellQuote(value: string): string {
 
 function buildPiCommandParts(teamsEntry: string | null): string[] {
 	const parts = ["pi"];
-	if (teamsEntry) parts.push("--no-extensions", "-e", teamsEntry);
+	if (teamsEntry) parts.push("--no-skills", "-e", teamsEntry);
 	return parts;
 }
 
