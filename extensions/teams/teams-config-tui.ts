@@ -360,7 +360,9 @@ async function spawnTeamScreen(pi: ExtensionAPI, ctx: ExtensionContext): Promise
 	if (!choice || choice === BACK) return;
 
 	const teamName = (choice.split(" [")[0] ?? "").trim();
-	// Trigger spawn via sendUserMessage (the LLM will use the teams tool)
+	// Note: We use sendUserMessage because /team-config runs as a command handler
+	// without access to spawnTeammate(). The LLM will use the teams tool to spawn.
+	// This is intentional — commands are lightweight, spawn is heavy.
 	pi.sendUserMessage(`Spawn predefined team '${teamName}' using the teams tool with action=predefined_team_spawn.`);
 }
 

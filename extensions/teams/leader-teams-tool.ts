@@ -41,6 +41,7 @@ import {
 	getAgentDefinition,
 	getPredefinedTeam,
 } from "./predefined/discovery.js";
+import { buildPredefinedSpawnOptions } from "./predefined-agent-spawn.js";
 
 type TeamsToolDelegateTask = { text: string; assignee?: string };
 
@@ -990,61 +991,53 @@ export function registerTeamsTool(opts: {
 
 				const template = getPredefinedTeam(teamName, ctx.cwd);
 				if (!template) {
-					const available = getAllPredefinedTeams(ctx.cwd).map(t => t.name);
+					const available = getAllPredefinedTeams(ctx.cwd).map((t) => t.name);
 					return {
 						content: [{ type: "text", text: `Team template '${teamName}' not found. Available: ${available.join(", ") || "(none)"}` }],
 						details: { action, teamName, available },
 					};
 				}
 
-				// Resolve all agent definitions for this team
-				const resolvedAgents: Array<{ def: import("./predefined/types.js").AgentDefinition | undefined; name: string }> = [];
 				const warnings: string[] = [];
-				for (const agentName of template.agents) {
-					const def = getAgentDefinition(agentName, ctx.cwd);
-					if (!def) {
-						warnings.push(`Agent '${agentName}' not found — will spawn with default settings`);
-					}
-					resolvedAgents.push({ def, name: agentName });
-				}
-
-				// Spawn each agent
 				const spawned: string[] = [];
 				const contextMode: ContextMode = params.contextMode === "branch" ? "branch" : "fresh";
 				const requestedWorkspaceMode: WorkspaceMode = params.workspaceMode === "worktree" ? "worktree" : "shared";
-				const spawnThinking = params.thinking;
 
-				for (const { def, name } of resolvedAgents) {
+				for (const agentName of template.agents) {
 					if (signal?.aborted) break;
-					if (teammates.has(name)) {
-						spawned.push(name);
+					if (teammates.has(agentName)) {
+						spawned.push(agentName);
 						continue;
 					}
 
-					const spawnModel = def?.model || params.model?.trim() || undefined;
-					const spawnThink = def?.thinking ? (def.thinking as "off" | "minimal" | "low" | "medium" | "high" | "xhigh") : spawnThinking;
+					const def = getAgentDefinition(agentName, ctx.cwd);
+					if (!def) {
+						warnings.push(`Agent '${agentName}' not found — spawning with default settings`);
+					}
+
+					// Use buildPredefinedSpawnOptions to build per-agent overrides
+					const agentOpts = def
+						? buildPredefinedSpawnOptions(def, {
+								model: params.model?.trim() || undefined,
+								thinking: params.thinking,
+							})
+						: { name: agentName }; // fallback: no overrides
 
 					const res = await spawnTeammate(ctx, {
-						name,
+						name: agentName,
 						mode: contextMode,
 						workspaceMode: requestedWorkspaceMode,
-						model: spawnModel,
-						thinking: spawnThink,
+						model: agentOpts.model,
+						thinking: agentOpts.thinking,
+						tools: agentOpts.tools,
+						systemPromptAppend: agentOpts.systemPromptAppend,
 					});
 
 					if (!res.ok) {
-						warnings.push(`Failed to spawn '${name}': ${res.error}`);
+						warnings.push(`Failed to spawn '${agentName}': ${res.error}`);
 					} else {
 						spawned.push(res.name);
 						warnings.push(...res.warnings);
-
-						// If agent has a custom prompt, send it as a steer message
-						if (def?.prompt) {
-							const rpc = teammates.get(res.name);
-							if (rpc) {
-								await rpc.steer(`Your role: ${def.prompt}`);
-							}
-						}
 					}
 				}
 

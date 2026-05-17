@@ -59,7 +59,12 @@ function readToolPolicy(): Set<string> {
 	try {
 		if (fs.existsSync(policyPath)) {
 			const raw = JSON.parse(fs.readFileSync(policyPath, "utf-8"));
-			policy = { ...DEFAULT_TOOL_POLICY, ...raw };
+			// Validate each field is a string array — fall back to default if not
+			const validated: ToolPolicyConfig = { baseline: DEFAULT_TOOL_POLICY.baseline, denied: [], extra: DEFAULT_TOOL_POLICY.extra };
+			if (Array.isArray(raw.baseline) && raw.baseline.every((t: unknown) => typeof t === "string")) validated.baseline = raw.baseline;
+			if (Array.isArray(raw.denied) && raw.denied.every((t: unknown) => typeof t === "string")) validated.denied = raw.denied;
+			if (Array.isArray(raw.extra) && raw.extra.every((t: unknown) => typeof t === "string")) validated.extra = raw.extra;
+			policy = validated;
 		}
 	} catch {
 		// use defaults
@@ -610,11 +615,13 @@ export function runLeader(pi: ExtensionAPI): void {
 		});
 
 		const builtInToolSet = readToolPolicy();
-		const tools = (pi.getActiveTools() ?? []).filter((t) => builtInToolSet.has(t));
+		const effectiveTools = opts.tools
+			? opts.tools // Predefined agent: use its explicit tool list
+			: (pi.getActiveTools() ?? []).filter((t) => builtInToolSet.has(t));
 		const argsForChild: string[] = [];
 		if (sessionFile) argsForChild.push("--session", sessionFile);
 		argsForChild.push("--session-dir", teamSessionsDir);
-		if (tools.length) argsForChild.push("--tools", tools.join(","));
+		if (effectiveTools.length) argsForChild.push("--tools", effectiveTools.join(","));
 
 		// Model + thinking for the child process.
 		if (childModelId) {
@@ -631,7 +638,7 @@ export function runLeader(pi: ExtensionAPI): void {
 		}
 
 		const strings = getTeamsStrings(style);
-		const systemAppend = `You are ${strings.memberTitle.toLowerCase()} '${name}'. You collaborate with the ${strings.leaderTitle.toLowerCase()}. Prefer working from the shared task list.\n`;
+		const systemAppend = `You are ${strings.memberTitle.toLowerCase()} '${name}'. You collaborate with the ${strings.leaderTitle.toLowerCase()}. Prefer working from the shared task list.\n${opts.systemPromptAppend ?? ""}`;
 		argsForChild.push("--append-system-prompt", systemAppend);
 
 		const autoClaim = (process.env.PI_TEAMS_DEFAULT_AUTO_CLAIM ?? "1") === "1";

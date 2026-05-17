@@ -1,39 +1,43 @@
 /**
- * Build spawn arguments from a predefined agent definition.
+ * Build SpawnTeammateOptions overrides from a predefined agent definition.
  *
- * This module takes an AgentDefinition (from .md file) and produces
- * the spawn args that get merged into the teammate spawn pipeline.
- * It does NOT spawn directly — the caller (leader.ts) uses these
- * to augment the existing spawnTeammate() flow.
+ * The caller passes these into spawnTeammate() which applies them
+ * in the spawn pipeline (tools, system prompt, model, thinking).
  */
 import type { AgentDefinition } from "./predefined/types.js";
-
-export interface PredefinedSpawnOverrides {
-	/** Extra tools to add to the built-in set. */
-	extraTools: string[];
-	/** Extra MCP tools to add (mcp: prefix will be prepended). */
-	extraMcpTools: string[];
-	/** Model override from agent definition. */
-	model?: string;
-	/** Thinking level override from agent definition. */
-	thinking?: string;
-	/** System prompt append from agent definition. */
-	systemPromptAppend: string;
-}
+import type { SpawnTeammateOptions } from "./spawn-types.js";
 
 /**
- * Extract spawn overrides from an AgentDefinition.
+ * Build spawn options from a predefined agent definition.
  *
- * These are merged INTO the existing spawn pipeline —
- * the caller adds extraTools/extraMcpTools to the builtInToolSet,
- * applies model/thinking overrides, and appends the system prompt.
+ * Returns a partial SpawnTeammateOptions that the caller merges
+ * with any CLI/user overrides (user overrides win).
  */
-export function getPredefinedSpawnOverrides(agent: AgentDefinition): PredefinedSpawnOverrides {
+export function buildPredefinedSpawnOptions(
+	agent: AgentDefinition,
+	defaults: {
+		model?: string;
+		thinking?: SpawnTeammateOptions["thinking"];
+	},
+): SpawnTeammateOptions {
+	// Build tool list from agent definition
+	const tools: string[] = [];
+	if (agent.tools) {
+		tools.push(...agent.tools);
+	}
+	if (agent.mcpTools) {
+		for (const t of agent.mcpTools) {
+			tools.push(`mcp:${t}`);
+		}
+	}
+
 	return {
-		extraTools: agent.tools ?? [],
-		extraMcpTools: agent.mcpTools ?? [],
-		model: agent.model,
-		thinking: agent.thinking,
-		systemPromptAppend: agent.prompt,
+		name: agent.name,
+		model: agent.model ?? defaults.model,
+		thinking: agent.thinking
+			? (agent.thinking as SpawnTeammateOptions["thinking"])
+			: defaults.thinking,
+		tools: tools.length > 0 ? tools : undefined,
+		systemPromptAppend: agent.prompt || undefined,
 	};
 }

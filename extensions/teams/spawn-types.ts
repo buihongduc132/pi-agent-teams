@@ -19,6 +19,10 @@ export interface SpawnTeammateOptions {
 	model?: string;
 	/** Optional thinking level override for the spawned teammate. */
 	thinking?: ThinkingLevel;
+	/** Optional tool overrides (replaces builtInToolSet). */
+	tools?: string[];
+	/** Optional extra system prompt append (added after default teammate prompt). */
+	systemPromptAppend?: string;
 }
 
 export type SpawnTeammateResult =

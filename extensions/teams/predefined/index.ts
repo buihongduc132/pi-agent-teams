@@ -5,7 +5,7 @@
  * - Agent .md definitions (frontmatter + prompt)
  * - teams.yaml team templates
  */
-export type { AgentDefinition, PredefinedTeam, ToolPolicy } from "./types.js";
+export type { AgentDefinition, PredefinedTeam } from "./types.js";
 export { parseAgentFrontmatter, serializeAgentMarkdown } from "./agent-parser.js";
 export { parseTeamsYaml, serializeTeamsYaml } from "./teams-yaml-parser.js";
 export {

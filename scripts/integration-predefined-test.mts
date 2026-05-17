@@ -22,14 +22,8 @@ import { parseAgentFrontmatter, serializeAgentMarkdown } from "../extensions/tea
 import { parseTeamsYaml, serializeTeamsYaml } from "../extensions/teams/predefined/teams-yaml-parser.js";
 import {
 	discoverAgents,
-	getAllAgentDefinitions,
-	getAllPredefinedTeams,
-	getAgentDefinition,
-	getPredefinedTeam,
-	getUserAgentsDir,
-	getUserTeamsYamlPath,
 } from "../extensions/teams/predefined/discovery.js";
-import { getPredefinedSpawnOverrides } from "../extensions/teams/predefined-agent-spawn.js";
+import { buildPredefinedSpawnOptions } from "../extensions/teams/predefined-agent-spawn.js";
 import type { AgentDefinition, PredefinedTeam } from "../extensions/teams/predefined/types.js";
 
 // ── Test harness ─────────────────────────────────────────────────────
@@ -60,6 +54,16 @@ function assertIncludes(arr: string[], item: string, label: string) {
 	assert(arr.includes(item), label);
 }
 
+/** Unwrap a possibly-null value after an assert(non-null) check. */
+function unwrap<T>(v: T | null | undefined, label: string): T {
+	if (v === null || v === undefined) {
+		failed++;
+		console.error(`  ✗ ${label} — unexpected null`);
+		throw new Error(`Assertion failed: ${label}`);
+	}
+	return v;
+}
+
 // ── Temp directory setup ─────────────────────────────────────────────
 
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "predefined-test-"));
@@ -85,13 +89,13 @@ You are a code reviewer. Focus on correctness.`;
 
 	const result = parseAgentFrontmatter(md, "/fake/reviewer.md");
 	assert(result !== null, "parseAgentFrontmatter returns non-null for valid frontmatter");
-	assertEq(result!.name, "reviewer", "name parsed correctly");
-	assertEq(result!.description, "Code review specialist", "description parsed correctly");
-	assertEq(result!.tools, ["read", "bash", "intercom"], "tools parsed correctly");
-	assertEq(result!.model, "anthropic/claude-sonnet-4", "model parsed correctly");
-	assertEq(result!.thinking, "high", "thinking parsed correctly");
-	assertEq(result!.prompt, "You are a code reviewer. Focus on correctness.", "prompt body parsed correctly");
-	assertEq(result!.filePath, "/fake/reviewer.md", "filePath preserved");
+	assertEq(unwrap(result, "non-null").name, "reviewer", "name parsed correctly");
+	assertEq(unwrap(result, "non-null").description, "Code review specialist", "description parsed correctly");
+	assertEq(unwrap(result, "non-null").tools, ["read", "bash", "intercom"], "tools parsed correctly");
+	assertEq(unwrap(result, "non-null").model, "anthropic/claude-sonnet-4", "model parsed correctly");
+	assertEq(unwrap(result, "non-null").thinking, "high", "thinking parsed correctly");
+	assertEq(unwrap(result, "non-null").prompt, "You are a code reviewer. Focus on correctness.", "prompt body parsed correctly");
+	assertEq(unwrap(result, "non-null").filePath, "/fake/reviewer.md", "filePath preserved");
 }
 
 {
@@ -104,8 +108,8 @@ Use hindsight tools.`;
 
 	const result = parseAgentFrontmatter(md, "/fake/mcp.md");
 	assert(result !== null, "parseAgentFrontmatter handles MCP tools");
-	assertEq(result!.tools, ["read", "bash"], "regular tools separated from MCP");
-	assertEq(result!.mcpTools, ["hindsight_search", "hindsight_retain"], "MCP tools have prefix stripped");
+	assertEq(unwrap(result, "non-null").tools, ["read", "bash"], "regular tools separated from MCP");
+	assertEq(unwrap(result, "non-null").mcpTools, ["hindsight_search", "hindsight_retain"], "MCP tools have prefix stripped");
 }
 
 {
@@ -132,11 +136,11 @@ name: minimal
 Just work.`;
 	const result = parseAgentFrontmatter(md, "/fake/minimal.md");
 	assert(result !== null, "parseAgentFrontmatter accepts minimal frontmatter");
-	assertEq(result!.name, "minimal", "name correct");
-	assertEq(result!.tools, undefined, "tools undefined when not specified");
-	assertEq(result!.mcpTools, undefined, "mcpTools undefined when not specified");
-	assertEq(result!.model, undefined, "model undefined when not specified");
-	assertEq(result!.thinking, undefined, "thinking undefined when not specified");
+	assertEq(unwrap(result, "non-null").name, "minimal", "name correct");
+	assertEq(unwrap(result, "non-null").tools, undefined, "tools undefined when not specified");
+	assertEq(unwrap(result, "non-null").mcpTools, undefined, "mcpTools undefined when not specified");
+	assertEq(unwrap(result, "non-null").model, undefined, "model undefined when not specified");
+	assertEq(unwrap(result, "non-null").thinking, undefined, "thinking undefined when not specified");
 }
 
 {
@@ -148,7 +152,7 @@ tools:
 No tools.`;
 	const result = parseAgentFrontmatter(md, "/fake/empty-tools.md");
 	assert(result !== null, "parseAgentFrontmatter handles empty tools");
-	assertEq(result!.tools, undefined, "empty tools → undefined");
+	assertEq(unwrap(result, "non-null").tools, undefined, "empty tools → undefined");
 }
 
 {
@@ -171,10 +175,10 @@ No tools.`;
 	// Round-trip
 	const parsed = parseAgentFrontmatter(md, "/fake/roundtrip.md");
 	assert(parsed !== null, "round-trip: parsed serialized markdown");
-	assertEq(parsed!.name, "worker", "round-trip: name preserved");
-	assertEq(parsed!.tools, ["read", "bash", "edit"], "round-trip: tools preserved");
-	assertEq(parsed!.mcpTools, ["hindsight_search"], "round-trip: mcpTools preserved");
-	assertEq(parsed!.prompt, "Do the work.", "round-trip: prompt preserved");
+	assertEq(unwrap(parsed, "non-null").name, "worker", "round-trip: name preserved");
+	assertEq(unwrap(parsed, "non-null").tools, ["read", "bash", "edit"], "round-trip: tools preserved");
+	assertEq(unwrap(parsed, "non-null").mcpTools, ["hindsight_search"], "round-trip: mcpTools preserved");
+	assertEq(unwrap(parsed, "non-null").prompt, "Do the work.", "round-trip: prompt preserved");
 }
 
 // ── Section: teams-yaml-parser ───────────────────────────────────────
@@ -341,9 +345,8 @@ console.log("\n=== predefined-agent-spawn ===\n");
 		filePath: "/fake/worker.md",
 	};
 
-	const overrides = getPredefinedSpawnOverrides(agent);
-	assertEq(overrides.extraTools, ["read", "bash", "edit", "write"], "extraTools correct");
-	assertEq(overrides.extraMcpTools, ["hindsight_search"], "extraMcpTools correct");
+	const overrides = buildPredefinedSpawnOptions(agent, {});
+	assertEq(overrides.tools, ["read", "bash", "edit", "write", "mcp:hindsight_search"], "tools correct (with mcp prefix)");
 	assertEq(overrides.model, "anthropic/claude-sonnet-4", "model override correct");
 	assertEq(overrides.thinking, "high", "thinking override correct");
 	assertEq(overrides.systemPromptAppend, "Do work.", "systemPromptAppend correct");
@@ -358,9 +361,8 @@ console.log("\n=== predefined-agent-spawn ===\n");
 		filePath: "/fake/minimal.md",
 	};
 
-	const overrides = getPredefinedSpawnOverrides(agent);
-	assertEq(overrides.extraTools, [], "empty extraTools for minimal agent");
-	assertEq(overrides.extraMcpTools, [], "empty extraMcpTools for minimal agent");
+	const overrides = buildPredefinedSpawnOptions(agent, {});
+	assertEq(overrides.tools, undefined, "no tools for minimal agent");
 	assertEq(overrides.model, undefined, "no model override for minimal agent");
 	assertEq(overrides.thinking, undefined, "no thinking override for minimal agent");
 	assertEq(overrides.systemPromptAppend, "Work.", "prompt still captured");
@@ -395,7 +397,17 @@ console.log("\n=== tool policy ===\n");
 	assert(withDenied.has("read"), "denied doesn't remove read");
 	assertEq(withDenied.size, 9, "denied tool count");
 
-	// Simulate: write + read back
+	// Simulate: malformed JSON (string instead of array)
+	const malformedPath = path.join(tmpDir, "malformed-policy.json");
+	fs.writeFileSync(malformedPath, JSON.stringify({ baseline: "read", denied: "edit", extra: 123 }));
+	// readToolPolicy would handle this gracefully — test the validation logic
+	const raw = JSON.parse(fs.readFileSync(malformedPath, "utf-8"));
+	const isValidArray = (v: unknown): v is string[] => Array.isArray(v) && v.every((t: unknown) => typeof t === "string");
+	assert(!isValidArray(raw.baseline), "malformed baseline (string) rejected");
+	assert(!isValidArray(raw.denied), "malformed denied (string) rejected");
+	assert(!isValidArray(raw.extra), "malformed extra (number) rejected");
+
+	// Simulate: write valid policy + read back
 	const policyPath = path.join(tmpDir, "teams-tool-policy.json");
 	const policy = {
 		baseline: ["read", "bash"],
@@ -434,9 +446,9 @@ console.log("\n=== TUI helpers ===\n");
 	assert(fs.existsSync(filePath), "writeAgentFile creates file");
 	const parsed = parseAgentFrontmatter(fs.readFileSync(filePath, "utf-8"), filePath);
 	assert(parsed !== null, "written file parses correctly");
-	assertEq(parsed!.name, "tui-worker", "written agent name correct");
-	assertEq(parsed!.tools, ["read", "bash"], "written agent tools correct");
-	assertEq(parsed!.prompt, "TUI work.", "written agent prompt correct");
+	assertEq(unwrap(parsed, "non-null").name, "tui-worker", "written agent name correct");
+	assertEq(unwrap(parsed, "non-null").tools, ["read", "bash"], "written agent tools correct");
+	assertEq(unwrap(parsed, "non-null").prompt, "TUI work.", "written agent prompt correct");
 }
 
 {
@@ -462,7 +474,7 @@ console.log("\n=== TUI helpers ===\n");
 	assertEq(teams[1]?.name, "beta", "appended team name");
 
 	// Update existing
-	teams[0]!.agents = ["a1", "a2", "a3"];
+	(teams[0] as { name: string; agents: string[] }).agents = ["a1", "a2", "a3"];
 	fs.writeFileSync(yamlPath, serializeTeamsYaml(teams), "utf-8");
 
 	content = fs.readFileSync(yamlPath, "utf-8");
@@ -479,8 +491,8 @@ console.log("\n=== edge cases ===\n");
 	const md = "---\r\nname: crlf-agent\r\n---\r\nBody with CRLF.";
 	const result = parseAgentFrontmatter(md, "/fake/crlf.md");
 	assert(result !== null, "CRLF frontmatter parsed");
-	assertEq(result!.name, "crlf-agent", "CRLF name correct");
-	assertEq(result!.prompt, "Body with CRLF.", "CRLF body correct");
+	assertEq(unwrap(result, "non-null").name, "crlf-agent", "CRLF name correct");
+	assertEq(unwrap(result, "non-null").prompt, "Body with CRLF.", "CRLF body correct");
 }
 
 {
@@ -493,7 +505,7 @@ Line 2.
 Line 3.`;
 	const result = parseAgentFrontmatter(md, "/fake/multi.md");
 	assert(result !== null, "multi-line prompt parsed");
-	assert(result!.prompt.includes("Line 2."), "multi-line body preserved");
+	assert(unwrap(result, "non-null").prompt.includes("Line 2."), "multi-line body preserved");
 }
 
 {
@@ -514,7 +526,7 @@ tools: read, bash
 Review.`;
 	const result = parseAgentFrontmatter(md, "/fake/hyphen.md");
 	assert(result !== null, "hyphenated name parsed");
-	assertEq(result!.name, "code-reviewer", "hyphenated name preserved");
+	assertEq(unwrap(result, "non-null").name, "code-reviewer", "hyphenated name preserved");
 }
 
 {
@@ -537,7 +549,7 @@ tools: ${tools.join(", ")}
 Use all tools.`;
 	const result = parseAgentFrontmatter(md, "/fake/many-tools.md");
 	assert(result !== null, "long tools list parsed");
-	assertEq(result!.tools?.length, 50, "all 50 tools parsed");
+	assertEq(unwrap(result, "non-null").tools?.length, 50, "all 50 tools parsed");
 }
 
 {
@@ -557,7 +569,7 @@ name: empty-body
 `;
 	const result = parseAgentFrontmatter(md, "/fake/empty-body.md");
 	assert(result !== null, "no body after frontmatter parsed");
-	assertEq(result!.prompt, "", "empty body → empty string");
+	assertEq(unwrap(result, "non-null").prompt, "", "empty body → empty string");
 }
 
 // ── Cleanup ──────────────────────────────────────────────────────────
