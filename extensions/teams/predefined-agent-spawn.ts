@@ -27,7 +27,7 @@ export function buildPredefinedSpawnOptions(
 	}
 	if (agent.mcpTools) {
 		for (const t of agent.mcpTools) {
-			tools.push(`mcp:${t}`);
+			tools.push(t);
 		}
 	}
 

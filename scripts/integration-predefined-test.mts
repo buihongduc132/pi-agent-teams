@@ -346,7 +346,7 @@ console.log("\n=== predefined-agent-spawn ===\n");
 	};
 
 	const overrides = buildPredefinedSpawnOptions(agent, {});
-	assertEq(overrides.tools, ["read", "bash", "edit", "write", "mcp:hindsight_search"], "tools correct (with mcp prefix)");
+	assertEq(overrides.tools, ["read", "bash", "edit", "write", "hindsight_search"], "tools correct (no mcp prefix)");
 	assertEq(overrides.model, "anthropic/claude-sonnet-4", "model override correct");
 	assertEq(overrides.thinking, "high", "thinking override correct");
 	assertEq(overrides.systemPromptAppend, "Do work.", "systemPromptAppend correct");

@@ -38,12 +38,3 @@ export interface PredefinedTeam {
 	description?: string;
 }
 
-/** Tool policy for team workers. */
-export interface ToolPolicy {
-	/** Tools every worker gets by default. */
-	baseline: string[];
-	/** Tools no worker may ever have. */
-	denied: string[];
-	/** Extra tools added on top of baseline. */
-	extra: string[];
-}
