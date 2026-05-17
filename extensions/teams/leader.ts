@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@mariozechner/pi-coding-agent";
@@ -36,6 +37,37 @@ import {
 import { handleTeamCommand } from "./leader-team-command.js";
 import { registerTeamsTool } from "./leader-teams-tool.js";
 import type { ContextMode, SpawnTeammateFn, SpawnTeammateResult, WorkspaceMode } from "./spawn-types.js";
+
+interface ToolPolicyConfig {
+	baseline: string[];
+	denied: string[];
+	extra: string[];
+}
+
+const DEFAULT_TOOL_POLICY: ToolPolicyConfig = {
+	baseline: ["read", "bash", "edit", "write", "grep", "find", "ls"],
+	denied: [],
+	extra: [
+		// MCP tools: Hindsight (via pi-mcp-adapter + mcp-hub)
+		"hindsight_search", "hindsight_context", "hindsight_retain", "hindsight_bank_profile",
+	],
+};
+
+function readToolPolicy(): Set<string> {
+	const policyPath = path.join(os.homedir(), ".pi", "agent", "teams-tool-policy.json");
+	let policy = DEFAULT_TOOL_POLICY;
+	try {
+		if (fs.existsSync(policyPath)) {
+			const raw = JSON.parse(fs.readFileSync(policyPath, "utf-8"));
+			policy = { ...DEFAULT_TOOL_POLICY, ...raw };
+		}
+	} catch {
+		// use defaults
+	}
+	const tools = new Set([...policy.baseline, ...policy.extra]);
+	for (const d of policy.denied) tools.delete(d);
+	return tools;
+}
 
 function getTeamsExtensionEntryPath(): string | null {
 	// In dev, teammates won't automatically have this extension unless it is installed or discoverable.
@@ -435,9 +467,9 @@ export function runLeader(pi: ExtensionAPI): void {
 		if (!currentCtx || widgetSuppressed) return;
 		try {
 			currentCtx.ui.setWidget("pi-teams", widgetFactory);
-		} catch (e: any) {
-			if (e.message?.includes("stale")) return;
-			throw e;
+		} catch (err: unknown) {
+			if (err instanceof Error && err.message?.includes("stale")) return;
+			throw err;
 		}
 	};
 	const debouncedRenderWidget = createDebouncedTrigger(renderWidgetNow, debouncedWidgetDelayMs);
@@ -577,11 +609,7 @@ export function runLeader(pi: ExtensionAPI): void {
 			void setMemberStatus(teamDir, name, "offline", { meta: { exitCode: code ?? undefined } });
 		});
 
-		const builtInToolSet = new Set([
-			"read", "bash", "edit", "write", "grep", "find", "ls",
-			// MCP tools: Hindsight (via pi-mcp-adapter + mcp-hub)
-			"hindsight_search", "hindsight_context", "hindsight_retain", "hindsight_bank_profile",
-		]);
+		const builtInToolSet = readToolPolicy();
 		const tools = (pi.getActiveTools() ?? []).filter((t) => builtInToolSet.has(t));
 		const argsForChild: string[] = [];
 		if (sessionFile) argsForChild.push("--session", sessionFile);
@@ -1092,6 +1120,16 @@ export function runLeader(pi: ExtensionAPI): void {
 					}
 				},
 			});
+		},
+	});
+
+	// ── /team-config: Interactive TUI for managing agents + teams ──
+
+	pi.registerCommand("team-config", {
+		description: "Team configuration panel (vim-style navigation)",
+		handler: async (_args, ctx) => {
+			const { runTeamConfigTUI } = await import("./teams-config-tui.js");
+			await runTeamConfigTUI(pi, ctx);
 		},
 	});
 }

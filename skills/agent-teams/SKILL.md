@@ -51,6 +51,9 @@ Use the **`teams` tool** (LLM-callable) for delegation, task/messaging mutations
 | `hooks_policy_set` | one or more: `hookFailureAction`, `hookMaxReopensPerTask`, `hookFollowupOwner` | Update team hooks policy at runtime (`hooksPolicyReset=true` clears team overrides first). |
 | `model_policy_get` | _(none)_ | Inspect teammate model policy and current leader inheritance behavior. |
 | `model_policy_check` | optional `model` | Validate a model override before spawn (`<provider>/<modelId>` or `<modelId>`). |
+| `predefined_teams_list` | _(none)_ | List all team templates from teams.yaml files. |
+| `predefined_agents_list` | _(none)_ | List all agent .md definitions. |
+| `predefined_team_spawn` | `name` | Spawn all agents from a predefined team template by name. |
 
 Examples:
 
@@ -65,6 +68,9 @@ teams({ action: "hooks_policy_get" })
 teams({ action: "hooks_policy_set", hookFailureAction: "reopen_followup", hookMaxReopensPerTask: 2, hookFollowupOwner: "member" })
 teams({ action: "model_policy_get" })
 teams({ action: "model_policy_check", model: "openai-codex/gpt-5.1-codex-mini" })
+teams({ action: "predefined_teams_list" })
+teams({ action: "predefined_agents_list" })
+teams({ action: "predefined_team_spawn", name: "code-review" })
 ```
 
 This covers most day-to-day orchestration without slash commands. For nuanced/manual control, use `/team ...` commands directly.
@@ -178,3 +184,85 @@ Teammates and the leader communicate via JSON messages with a `type` field:
 | `plan_approved` | leader -> teammate | Proceed with implementation |
 | `plan_rejected` | leader -> teammate | Revise plan (includes feedback) |
 | `peer_dm_sent` | teammate -> leader | CC notification of peer message |
+
+## Predefined Teams & Agent Definitions
+
+Define reusable team templates and agent profiles. No need to specify each teammate manually every time.
+
+### Agent definitions
+
+Create `.md` files with YAML frontmatter:
+
+```markdown
+---
+name: reviewer
+description: Code review specialist
+tools: read, bash, intercom
+model: anthropic/claude-sonnet-4
+thinking: high
+---
+You are a senior code reviewer. Focus on correctness, performance, and maintainability.
+```
+
+**Discovery paths:**
+- User scope: `~/.pi/agent/agents/*.md`
+- Project scope: `.pi/agents/*.md` (project wins on collision)
+
+**Fields:**
+- `name` (required): agent identifier
+- `description`: human-readable summary
+- `tools`: comma-separated tool allowlist (omit to inherit leader's tools)
+- `model`: model override (omit to inherit)
+- `thinking`: thinking level override (omit to inherit)
+- Body: the agent's system prompt
+
+### Team templates
+
+Create `teams.yaml` with team definitions:
+
+```yaml
+code-review:
+  - reviewer
+  - scout
+
+full-stack:
+  - worker
+  - reviewer
+  - architect
+```
+
+**Discovery paths:**
+- User scope: `~/.pi/teams.yaml`
+- Project scope: `.pi/teams.yaml` (project wins on collision)
+
+### Tool policy
+
+Configure worker tool defaults via `~/.pi/agent/teams-tool-policy.json`:
+
+```json
+{
+  "baseline": ["read", "bash", "edit", "write", "grep", "find", "ls"],
+  "denied": [],
+  "extra": ["hindsight_search", "hindsight_context", "hindsight_retain", "hindsight_bank_profile"]
+}
+```
+
+- `baseline`: tools every worker gets
+- `denied`: tools no worker may have
+- `extra`: additional tools added on top of baseline
+
+## /team-config TUI
+
+Interactive configuration panel accessible from within pi:
+
+```
+/team-config
+```
+
+Vim-style navigation (j/k/arrow keys) via pi's built-in `select()` dialogs.
+
+**Screens:**
+- **Agent Definitions**: list, create, edit, delete agent .md files
+- **Team Templates**: list, create, edit, delete teams.yaml entries
+- **Spawn Predefined Team**: select and spawn a team template
+- **Tool Policy**: view and edit `teams-tool-policy.json`

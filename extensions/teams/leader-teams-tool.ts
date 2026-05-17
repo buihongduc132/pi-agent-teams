@@ -35,6 +35,12 @@ import {
 } from "./task-store.js";
 import type { TeammateRpc } from "./teammate-rpc.js";
 import type { ContextMode, WorkspaceMode, SpawnTeammateFn } from "./spawn-types.js";
+import {
+	getAllPredefinedTeams,
+	getAllAgentDefinitions,
+	getAgentDefinition,
+	getPredefinedTeam,
+} from "./predefined/discovery.js";
 
 type TeamsToolDelegateTask = { text: string; assignee?: string };
 
@@ -66,6 +72,9 @@ const TeamsActionSchema = StringEnum(
 		"hooks_policy_set",
 		"model_policy_get",
 		"model_policy_check",
+		"predefined_teams_list",
+		"predefined_agents_list",
+		"predefined_team_spawn",
 	] as const,
 	{
 		description: "Teams tool action.",
@@ -930,6 +939,130 @@ export function registerTeamsTool(opts: {
 							followupOwner: effectiveFollowupOwner,
 						},
 					},
+				};
+			}
+
+			if (action === "predefined_teams_list") {
+				const teams = getAllPredefinedTeams(ctx.cwd);
+				if (teams.length === 0) {
+					return {
+						content: [{ type: "text", text: "No predefined teams found. Create ~/.pi/teams.yaml or .pi/teams.yaml" }],
+						details: { action, teamId, count: 0 },
+					};
+				}
+				const lines = teams.map(t => {
+					const agents = t.agents.join(", ");
+					return `${t.name}: [${agents}]${t.description ? ` — ${t.description}` : ""}`;
+				});
+				return {
+					content: [{ type: "text", text: `Predefined teams (${teams.length}):\n${lines.join("\n")}` }],
+					details: { action, teamId, teams },
+				};
+			}
+
+			if (action === "predefined_agents_list") {
+				const agents = getAllAgentDefinitions(ctx.cwd);
+				if (agents.length === 0) {
+					return {
+						content: [{ type: "text", text: "No agent definitions found. Create ~/.pi/agent/agents/*.md or .pi/agents/*.md" }],
+						details: { action, teamId, count: 0 },
+					};
+				}
+				const lines = agents.map(a => {
+					const tools = a.tools ? `[${a.tools.join(",")}]` : "(inherit)";
+					const model = a.model ? ` model=${a.model}` : "";
+					return `${a.name} ${tools}${model}${a.description ? ` — ${a.description}` : ""}`;
+				});
+				return {
+					content: [{ type: "text", text: `Agent definitions (${agents.length}):\n${lines.join("\n")}` }],
+					details: { action, teamId, agents: agents.map(a => ({ name: a.name, tools: a.tools, model: a.model })) },
+				};
+			}
+
+			if (action === "predefined_team_spawn") {
+				const teamName = params.name?.trim();
+				if (!teamName) {
+					return {
+						content: [{ type: "text", text: "predefined_team_spawn requires name (team template name)" }],
+						details: { action },
+					};
+				}
+
+				const template = getPredefinedTeam(teamName, ctx.cwd);
+				if (!template) {
+					const available = getAllPredefinedTeams(ctx.cwd).map(t => t.name);
+					return {
+						content: [{ type: "text", text: `Team template '${teamName}' not found. Available: ${available.join(", ") || "(none)"}` }],
+						details: { action, teamName, available },
+					};
+				}
+
+				// Resolve all agent definitions for this team
+				const resolvedAgents: Array<{ def: import("./predefined/types.js").AgentDefinition | undefined; name: string }> = [];
+				const warnings: string[] = [];
+				for (const agentName of template.agents) {
+					const def = getAgentDefinition(agentName, ctx.cwd);
+					if (!def) {
+						warnings.push(`Agent '${agentName}' not found — will spawn with default settings`);
+					}
+					resolvedAgents.push({ def, name: agentName });
+				}
+
+				// Spawn each agent
+				const spawned: string[] = [];
+				const contextMode: ContextMode = params.contextMode === "branch" ? "branch" : "fresh";
+				const requestedWorkspaceMode: WorkspaceMode = params.workspaceMode === "worktree" ? "worktree" : "shared";
+				const spawnThinking = params.thinking;
+
+				for (const { def, name } of resolvedAgents) {
+					if (signal?.aborted) break;
+					if (teammates.has(name)) {
+						spawned.push(name);
+						continue;
+					}
+
+					const spawnModel = def?.model || params.model?.trim() || undefined;
+					const spawnThink = def?.thinking ? (def.thinking as "off" | "minimal" | "low" | "medium" | "high" | "xhigh") : spawnThinking;
+
+					const res = await spawnTeammate(ctx, {
+						name,
+						mode: contextMode,
+						workspaceMode: requestedWorkspaceMode,
+						model: spawnModel,
+						thinking: spawnThink,
+					});
+
+					if (!res.ok) {
+						warnings.push(`Failed to spawn '${name}': ${res.error}`);
+					} else {
+						spawned.push(res.name);
+						warnings.push(...res.warnings);
+
+						// If agent has a custom prompt, send it as a steer message
+						if (def?.prompt) {
+							const rpc = teammates.get(res.name);
+							if (rpc) {
+								await rpc.steer(`Your role: ${def.prompt}`);
+							}
+						}
+					}
+				}
+
+				await refreshUi();
+				const lines: string[] = [
+					`Spawned predefined team '${teamName}': ${spawned.length}/${template.agents.length} agents`,
+				];
+				for (const s of spawned) {
+					lines.push(`- ${formatMemberDisplayName(style, s)}`);
+				}
+				if (warnings.length) {
+					lines.push("", "Warnings:");
+					for (const w of warnings) lines.push(`- ${w}`);
+				}
+
+				return {
+					content: [{ type: "text", text: lines.join("\n") }],
+					details: { action, teamId, teamName, spawned, warnings },
 				};
 			}
 
