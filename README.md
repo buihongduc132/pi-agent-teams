@@ -1,10 +1,10 @@
 # pi-agent-teams
 
 [![npm version](https://img.shields.io/npm/v/%40codexstar%2Fpi-agent-teams)](https://www.npmjs.com/package/@codexstar/pi-agent-teams)
-[![CI](https://github.com/codexstar69/pi-agent-teams/actions/workflows/ci.yml/badge.svg)](https://github.com/codexstar69/pi-agent-teams/actions/workflows/ci.yml)
+[![CI](https://github.com/buihongduc132/pi-agent-teams/actions/workflows/ci.yml/badge.svg)](https://github.com/buihongduc132/pi-agent-teams/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
-An experimental [Pi](https://pi.dev) extension that brings [Claude Code agent teams](https://code.claude.com/docs/en/agent-teams) to Pi. Spawn teammates, share a task list, and coordinate work across multiple Pi sessions.
+A [Pi](https://pi.dev) extension that brings [Claude Code agent teams](https://code.claude.com/docs/en/agent-teams) to Pi. Spawn teammates, share a task list, and coordinate work across multiple Pi sessions — with multi-agent teams, task delegation, worktree isolation, and mailbox messaging.
 
 ![pi-agent-teams dark product banner](docs/assets/banner-dark-glass.png)
 
@@ -79,24 +79,39 @@ Example:
 }
 ```
 
-## Install
+## Installation
 
-**Option A — install from npm:**
+### For Humans
 
 ```bash
 pi install npm:@codexstar/pi-agent-teams
 ```
 
-**Option B — load directly (dev):**
+### For AI Agents
 
-```bash
-pi -e ~/projects/pi-agent-teams/extensions/teams/index.ts
+Add to your `settings.json` packages:
+
+```json
+{
+  "packages": [
+    { "name": "npm:@codexstar/pi-agent-teams" }
+  ]
+}
 ```
 
-**Option C — install from a local folder:**
+### For pi git-sourced
 
-```bash
-pi install ~/projects/pi-agent-teams
+Add to your `settings.json` packages:
+
+```json
+{
+  "packages": [
+    {
+      "name": "@codexstar/pi-agent-teams",
+      "git": "https://github.com/buihongduc132/pi-agent-teams.git"
+    }
+  ]
+}
 ```
 
 Then run `pi` normally; the extension auto-discovers.
@@ -428,6 +443,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start-team-windows.ps1 pi-tea
 ```
 
 This opens a leader window plus one PowerShell window per teammate using the same filesystem-backed team primitives.
+
+## Acknowledgements
+
+This package is a fork of [codexstar69/pi-agent-teams](https://github.com/codexstar69/pi-agent-teams). Forked and maintained by [buihongduc132](https://github.com/buihongduc132).
 
 ## License
 
