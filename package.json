@@ -7,7 +7,10 @@
   "private": false,
   "type": "module",
   "keywords": [
-    "pi-package"
+    "pi-package",
+    "pi-extension",
+    "pi",
+    "pi-coding-agent"
   ],
   "repository": {
     "type": "git",
