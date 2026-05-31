@@ -10,7 +10,10 @@
     "pi-package",
     "pi-extension",
     "pi",
-    "pi-coding-agent"
+    "pi-coding-agent",
+    "teams",
+    "multi-agent",
+    "coordination"
   ],
   "repository": {
     "type": "git",

@@ -4,6 +4,8 @@
 [![CI](https://github.com/buihongduc132/pi-agent-teams/actions/workflows/ci.yml/badge.svg)](https://github.com/buihongduc132/pi-agent-teams/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
+> **Fork of [codexstar69/pi-agent-teams](https://github.com/codexstar69/pi-agent-teams)** — enhanced and maintained by [buihongduc132](https://github.com/buihongduc132).
+
 A [Pi](https://pi.dev) extension that brings [Claude Code agent teams](https://code.claude.com/docs/en/agent-teams) to Pi. Spawn teammates, share a task list, and coordinate work across multiple Pi sessions — with multi-agent teams, task delegation, worktree isolation, and mailbox messaging.
 
 ![pi-agent-teams dark product banner](docs/assets/banner-dark-glass.png)
