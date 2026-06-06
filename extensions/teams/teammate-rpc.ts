@@ -132,7 +132,7 @@ export class TeammateRpc {
 
 	async start(opts: { cwd: string; env: Record<string, string>; args: string[] }): Promise<void> {
 		if (this.proc) throw new Error("Teammate already started");
-		const startupTimeoutMs = parsePositiveInt(opts.env.PI_TEAMS_RPC_START_TIMEOUT_MS, 10_000);
+		const startupTimeoutMs = parsePositiveInt(opts.env.PI_TEAMS_RPC_START_TIMEOUT_MS, 60_000);
 
 		this.proc = spawn("pi", ["--mode", "rpc", ...opts.args], {
 			cwd: opts.cwd,
