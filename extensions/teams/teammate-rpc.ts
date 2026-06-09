@@ -132,7 +132,10 @@ export class TeammateRpc {
 
 	async start(opts: { cwd: string; env: Record<string, string>; args: string[] }): Promise<void> {
 		if (this.proc) throw new Error("Teammate already started");
-		const startupTimeoutMs = parsePositiveInt(opts.env.PI_TEAMS_RPC_START_TIMEOUT_MS, 60_000);
+		// 180s default: pi needs 45-55s for MCP init under normal conditions,
+		// and significantly more under memory pressure / swap thrashing.
+		// 10s/60s was far too aggressive — caused constant handshake failures.
+		const startupTimeoutMs = parsePositiveInt(opts.env.PI_TEAMS_RPC_START_TIMEOUT_MS, 180_000);
 
 		this.proc = spawn("pi", ["--mode", "rpc", ...opts.args], {
 			cwd: opts.cwd,
