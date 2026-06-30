@@ -168,6 +168,6 @@ export async function popUnreadMessages(teamDir: string, namespace: string, agen
 		);
 	} catch (err: unknown) {
 		if (isLockTimeoutError(err)) return [];
-		throw err;
+		throw new Error(err instanceof Error ? err.message : String(err), { cause: err });
 	}
 }

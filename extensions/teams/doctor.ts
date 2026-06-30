@@ -95,7 +95,7 @@ async function listLockFilesRecursive(rootDir: string): Promise<string[]> {
 				return await fs.promises.readdir(dir, { withFileTypes: true });
 			} catch (err: unknown) {
 				if (isErrnoException(err) && err.code === "ENOENT") return [];
-				throw err;
+				throw new Error(err instanceof Error ? err.message : String(err), { cause: err });
 			}
 		})();
 		for (const entry of entries) {

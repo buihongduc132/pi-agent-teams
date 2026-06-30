@@ -480,8 +480,8 @@ export function runLeader(pi: ExtensionAPI): void {
 			currentCtx.ui.setWidget("pi-teams", widgetFactory);
 		} catch (err: unknown) {
 			if (err instanceof Error && err.message?.includes("stale")) return;
-			if (err instanceof Error) throw err;
-			throw new Error(String(err));
+			// Wrap in new Error to satisfy no-throw-literal; preserve original via cause.
+			throw new Error(err instanceof Error ? err.message : String(err), { cause: err });
 		}
 	};
 	const debouncedRenderWidget = createDebouncedTrigger(renderWidgetNow, debouncedWidgetDelayMs);

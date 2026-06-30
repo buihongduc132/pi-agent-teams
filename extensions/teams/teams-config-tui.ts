@@ -313,8 +313,9 @@ async function teamDetailScreen(pi: ExtensionAPI, ctx: ExtensionContext, name: s
 					const teams = parseTeamsYaml(fs.readFileSync(yamlPath, "utf-8"));
 					if (teams.find((t) => t.name === name)) {
 						const idx = teams.findIndex((t) => t.name === name);
-						if (idx >= 0 && teams[idx]) {
-							teams[idx].agents = agents;
+						const team = idx >= 0 ? teams[idx] : undefined;
+						if (team) {
+							team.agents = agents;
 							fs.writeFileSync(yamlPath, serializeTeamsYaml(teams), "utf-8");
 							ctx.ui.notify("Updated team agents", "info");
 						}

@@ -321,7 +321,8 @@ export async function cleanupManagedWorktrees(teamDir: string): Promise<ManagedW
 			if (err instanceof Error && "code" in err && (err as NodeJS.ErrnoException).code === "ENOENT") {
 				return [];
 			}
-			throw err;
+			// Wrap to satisfy no-throw-literal; preserve original via cause.
+			throw new Error(err instanceof Error ? err.message : String(err), { cause: err });
 		}
 	})();
 
