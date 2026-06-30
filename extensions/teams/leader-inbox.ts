@@ -25,8 +25,10 @@ export async function pollLeaderInbox(opts: {
 	style: TeamsStyle;
 	pendingPlanApprovals: Map<string, { requestId: string; name: string; taskId?: string }>;
 	enqueueHook?: (invocation: TeamsHookInvocation) => void;
+	/** Optional: wake the leader LLM by injecting a user-visible message (triggers a new turn). */
+	wakeLeader?: (message: string) => void;
 }): Promise<number> {
-	const { ctx, teamId, teamDir, taskListId, leadName, style, pendingPlanApprovals, enqueueHook } = opts;
+	const { ctx, teamId, teamDir, taskListId, leadName, style, pendingPlanApprovals, enqueueHook, wakeLeader } = opts;
 	const strings = getTeamsStrings(style);
 
 	let msgs: Awaited<ReturnType<typeof popUnreadMessages>>;
@@ -202,8 +204,10 @@ export async function pollLeaderInbox(opts: {
 
 				if (idle.completedTaskId && idle.completedStatus === "failed") {
 					ctx.ui.notify(`${name} aborted task #${idle.completedTaskId}`, "warning");
+					wakeLeader?.(`[teams] ${name} FAILED task #${idle.completedTaskId}. Check team results and remediate.`);
 				} else if (idle.completedTaskId) {
-					ctx.ui.notify(`${name} is idle task #${idle.completedTaskId}`, "info");
+					ctx.ui.notify(`${name} completed task #${idle.completedTaskId}`, "info");
+					wakeLeader?.(`[teams] ${name} completed task #${idle.completedTaskId}. Check team results and proceed.`);
 				} else {
 					ctx.ui.notify(`${name} is idle`, "info");
 				}
