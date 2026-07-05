@@ -961,7 +961,8 @@ export async function clearTasks(
 			if (isErrnoException(err) && err.code === "ENOENT") {
 				return [];
 			}
-			throw err;
+			// Wrap to satisfy no-throw-literal; preserve original via cause.
+			throw new Error(err instanceof Error ? err.message : String(err), { cause: err });
 		}
 	})();
 

@@ -42,7 +42,7 @@ export async function listManagedWorktreePaths(teamDir: string): Promise<string[
 			return await fs.promises.readdir(worktreesDir, { withFileTypes: true });
 		} catch (err: unknown) {
 			if (err && typeof err === "object" && "code" in err && err.code === "ENOENT") return [];
-			throw err;
+			throw new Error(err instanceof Error ? err.message : String(err), { cause: err });
 		}
 	})();
 

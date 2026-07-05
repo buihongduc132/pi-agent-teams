@@ -97,10 +97,12 @@ export async function withLock<T>(lockFilePath: string, fn: () => Promise<T>, op
 				try { fs.closeSync(fd); } catch { /* ignore */ }
 				fd = null;
 				try { fs.unlinkSync(lockFilePath); } catch { /* ignore */ }
-				throw writeErr;
+				throw new Error(writeErr instanceof Error ? writeErr.message : String(writeErr), { cause: writeErr });
 			}
 		} catch (err: unknown) {
-			if (!isErrnoException(err) || err.code !== "EEXIST") throw err;
+			if (!isErrnoException(err) || err.code !== "EEXIST") {
+				throw new Error(err instanceof Error ? err.message : String(err), { cause: err });
+			}
 
 			let lockAgeMs: number | null = null;
 			let metadata: LockMetadata | null = null;

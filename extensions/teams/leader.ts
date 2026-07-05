@@ -66,8 +66,10 @@ function readToolPolicy(): Set<string> {
 			if (Array.isArray(raw.extra) && raw.extra.every((t: unknown) => typeof t === "string")) validated.extra = raw.extra;
 			policy = validated;
 		}
-	} catch {
-		// use defaults
+	} catch (err) {
+		// Malformed teams-tool-policy.json — fall back to DEFAULT_TOOL_POLICY.
+		// Module-level read (no ctx access); logged to stderr for debugging.
+		console.error(`[pi-agent-teams] Failed to read tool policy, using defaults:`, err instanceof Error ? err.message : String(err));
 	}
 	const tools = new Set([...policy.baseline, ...policy.extra]);
 	for (const d of policy.denied) tools.delete(d);
@@ -84,7 +86,9 @@ function getTeamsExtensionEntryPath(): string | null {
 		const js = path.join(dir, "index.js");
 		if (fs.existsSync(js)) return js;
 		return null;
-	} catch {
+	} catch (err) {
+		// Path resolution failure — non-fatal; caller falls back to null.
+		console.error(`[pi-agent-teams] resolveSessionBranch path error:`, err instanceof Error ? err.message : String(err));
 		return null;
 	}
 }
@@ -222,8 +226,9 @@ export function runLeader(pi: ExtensionAPI): void {
 			for (const [name, t] of teammates.entries()) {
 				try {
 					teammateEventUnsubs.get(name)?.();
-				} catch {
-					// ignore
+				} catch (err) {
+					// unsubscribe failure is non-fatal; log for debugging
+					console.error(`[pi-agent-teams] teammate event unsubscribe error:`, err instanceof Error ? err.message : String(err));
 				}
 				teammateEventUnsubs.delete(name);
 				tracker.reset(name);
@@ -280,8 +285,9 @@ export function runLeader(pi: ExtensionAPI): void {
 						) + "\n",
 						"utf8",
 					);
-				} catch {
-					// ignore logging errors
+				} catch (err) {
+					// hook-log write failure is non-fatal; log to stderr for debugging
+					console.error(`[pi-agent-teams] hook-log write error:`, err instanceof Error ? err.message : String(err));
 				}
 
 				const ok = res.exitCode === 0 && !res.timedOut && !res.error;
@@ -474,7 +480,8 @@ export function runLeader(pi: ExtensionAPI): void {
 			currentCtx.ui.setWidget("pi-teams", widgetFactory);
 		} catch (err: unknown) {
 			if (err instanceof Error && err.message?.includes("stale")) return;
-			throw err;
+			// Wrap in new Error to satisfy no-throw-literal; preserve original via cause.
+			throw new Error(err instanceof Error ? err.message : String(err), { cause: err });
 		}
 	};
 	const debouncedRenderWidget = createDebouncedTrigger(renderWidgetNow, debouncedWidgetDelayMs);
@@ -594,8 +601,9 @@ export function runLeader(pi: ExtensionAPI): void {
 		t.onClose((code) => {
 			try {
 				teammateEventUnsubs.get(name)?.();
-			} catch {
-				// ignore
+			} catch (err) {
+				// unsubscribe failure is non-fatal; log for debugging
+				console.error(`[pi-agent-teams] teammate event unsubscribe error:`, err instanceof Error ? err.message : String(err));
 			}
 			teammateEventUnsubs.delete(name);
 			tracker.reset(name);
@@ -688,8 +696,9 @@ export function runLeader(pi: ExtensionAPI): void {
 				text: JSON.stringify({ type: "set_session_name", name: sessionName, from: "team-lead", timestamp: ts }),
 				timestamp: ts,
 			});
-		} catch {
-			// ignore
+		} catch (err) {
+			// mailbox write failure — non-fatal; leader will retry on next poll
+			console.error(`[pi-agent-teams] mailbox write error:`, err instanceof Error ? err.message : String(err));
 		}
 
 		await ensureTeamConfig(teamDir, { teamId, taskListId: taskListId ?? teamId, leadName: "team-lead", style });
@@ -727,6 +736,15 @@ export function runLeader(pi: ExtensionAPI): void {
 			style,
 			pendingPlanApprovals,
 			enqueueHook,
+			wakeLeader: (message: string) => {
+				try {
+					pi.sendUserMessage(message);
+				} catch (err) {
+					// Surface failure via UI notify — wake is best-effort; TUI notify in
+					// leader-inbox.ts already fired, so the user is not left blind.
+					currentCtx?.ui.notify(`Failed to wake leader: ${err instanceof Error ? err.message : String(err)}`, "warning");
+				}
+			},
 		});
 	};
 
