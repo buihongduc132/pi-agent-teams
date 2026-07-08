@@ -297,6 +297,7 @@ Model inheritance note:
 | `PI_TEAMS_HOOKS_MAX_REOPENS_PER_TASK` | Reopen cap per task when failure action includes `reopen` (`0` disables auto-reopen) | `3` |
 | `PI_TEAMS_HOOKS_FOLLOWUP_OWNER` | Follow-up owner policy: `member`, `lead`, `none` | `member` |
 | `PI_TEAMS_HOOKS_CREATE_TASK_ON_FAILURE` | Legacy shortcut for `PI_TEAMS_HOOKS_FAILURE_ACTION=followup` | `0` (off) |
+| `PI_TEAMS_WAKE_LEADER_ON_ALL_EVENTS` | Wake leader (inject user message) on ALL team events — idle, task completion, peer DMs, plan requests, shutdown | `1` (on) |
 
 ## Storage layout
 

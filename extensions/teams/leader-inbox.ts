@@ -12,7 +12,7 @@ import {
 import { ensureTeamConfig, setMemberStatus, upsertMember } from "./team-config.js";
 import { getTask } from "./task-store.js";
 
-import type { TeamsHookInvocation } from "./hooks.js";
+import { shouldWakeLeaderOnAllEvents, type TeamsHookInvocation } from "./hooks.js";
 import type { TeamsStyle } from "./teams-style.js";
 import { formatMemberDisplayName, getTeamsStrings } from "./teams-style.js";
 
@@ -63,6 +63,9 @@ export async function pollLeaderInbox(opts: {
 				},
 			});
 			ctx.ui.notify(`${formatMemberDisplayName(style, name)} ${strings.shutdownCompletedVerb}`, "info");
+			if (shouldWakeLeaderOnAllEvents()) {
+				wakeLeader?.(`[teams] ${name} shut down successfully.`);
+			}
 			continue;
 		}
 
@@ -77,6 +80,9 @@ export async function pollLeaderInbox(opts: {
 				},
 			});
 			ctx.ui.notify(`${formatMemberDisplayName(style, name)} ${strings.shutdownRefusedVerb}: ${rejected.reason}`, "warning");
+			if (shouldWakeLeaderOnAllEvents()) {
+				wakeLeader?.(`[teams] ${name} refused shutdown: ${rejected.reason}`);
+			}
 			continue;
 		}
 
@@ -90,12 +96,18 @@ export async function pollLeaderInbox(opts: {
 				name,
 				taskId: planReq.taskId,
 			});
+			if (shouldWakeLeaderOnAllEvents()) {
+				wakeLeader?.(`[teams] ${name} requests plan approval for task ${planReq.taskId ?? "(unassigned)"}. Review and approve/reject via teams tool.`);
+			}
 			continue;
 		}
 
 		const peerDm = isPeerDmSent(m.text);
 		if (peerDm) {
 			ctx.ui.notify(`${peerDm.from} → ${peerDm.to}: ${peerDm.summary}`, "info");
+			if (shouldWakeLeaderOnAllEvents()) {
+				wakeLeader?.(`[teams] ${peerDm.from} sent a message to ${peerDm.to}: ${peerDm.summary}`);
+			}
 			continue;
 		}
 
@@ -210,12 +222,19 @@ export async function pollLeaderInbox(opts: {
 					wakeLeader?.(`[teams] ${name} completed task #${idle.completedTaskId}. Check team results and proceed.`);
 				} else {
 					ctx.ui.notify(`${name} is idle`, "info");
+					if (shouldWakeLeaderOnAllEvents()) {
+						wakeLeader?.(`[teams] ${name} is idle and available for work.`);
+					}
 				}
 			}
 			continue;
 		}
 
 		ctx.ui.notify(`Message from ${m.from}: ${m.text}`, "info");
+		if (shouldWakeLeaderOnAllEvents()) {
+			const preview = m.text.length > 200 ? m.text.slice(0, 200) + "..." : m.text;
+			wakeLeader?.(`[teams] Message from ${m.from}: ${preview}`);
+		}
 	}
 
 	return processed;
