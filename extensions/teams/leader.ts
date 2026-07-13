@@ -24,6 +24,7 @@ import { evaluateMaxWorkersPolicy } from "./max-workers-policy.js";
 import { getTeamsStyleFromEnv, type TeamsStyle, formatMemberDisplayName, getTeamsStrings } from "./teams-style.js";
 import { pollLeaderInbox as pollLeaderInboxImpl } from "./leader-inbox.js";
 import {
+	ensureHooksDirExists,
 	getHookBaseName,
 	getTeamsHookFailureAction,
 	getTeamsHookFollowupOwnerPolicy,
@@ -892,6 +893,9 @@ export function runLeader(pi: ExtensionAPI): void {
 			style,
 		});
 
+		// Ensure hooks directory exists so hook scripts are discoverable when enabled.
+		await ensureHooksDirExists();
+
 		lastRefreshStateKey = "";
 		await refreshTasks();
 		renderWidget();
@@ -922,6 +926,9 @@ export function runLeader(pi: ExtensionAPI): void {
 			leadName: "team-lead",
 			style,
 		});
+
+		// Ensure hooks directory exists so hook scripts are discoverable when enabled.
+		await ensureHooksDirExists();
 
 		lastRefreshStateKey = "";
 		await refreshTasks();

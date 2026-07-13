@@ -67,6 +67,7 @@ import {
 	runTeamsHook,
 	shouldCreateHookFollowupTask,
 	shouldReopenTaskOnHookFailure,
+	shouldWakeLeaderOnAllEvents,
 	resolveHookCommand,
 	resolvePowerShellCommand,
 } from "../extensions/teams/hooks.js";
@@ -1148,7 +1149,10 @@ console.log("\n9. teams-hooks (quality gates)");
 {
 	const prevRoot = process.env.PI_TEAMS_ROOT_DIR;
 	const prevEnabled = process.env.PI_TEAMS_HOOKS_ENABLED;
+	const prevHooksDir = process.env.PI_TEAMS_HOOKS_DIR;
 	process.env.PI_TEAMS_ROOT_DIR = tmpRoot;
+	// Clear hooks dir override so it derives from PI_TEAMS_ROOT_DIR
+	delete process.env.PI_TEAMS_HOOKS_DIR;
 	process.env.PI_TEAMS_HOOKS_ENABLED = "1";
 
 	const hooksDir = path.join(tmpRoot, "_hooks");
@@ -1245,11 +1249,20 @@ console.log("\n9. teams-hooks (quality gates)");
 	assertEq(getTeamsHookMaxReopensPerTask({}), 3, "hook max reopens default is 3");
 	assertEq(getTeamsHookMaxReopensPerTask({ PI_TEAMS_HOOKS_MAX_REOPENS_PER_TASK: "0" }), 0, "hook max reopens supports zero");
 
+	// shouldWakeLeaderOnAllEvents: default true, explicit disable
+	assertEq(shouldWakeLeaderOnAllEvents({}), true, "wake leader on all events defaults to true");
+	assertEq(shouldWakeLeaderOnAllEvents({ PI_TEAMS_WAKE_LEADER_ON_ALL_EVENTS: "1" }), true, "wake leader on all events explicit 1");
+	assertEq(shouldWakeLeaderOnAllEvents({ PI_TEAMS_WAKE_LEADER_ON_ALL_EVENTS: "0" }), false, "wake leader on all events disabled by 0");
+	assertEq(shouldWakeLeaderOnAllEvents({ PI_TEAMS_WAKE_LEADER_ON_ALL_EVENTS: "false" }), false, "wake leader on all events disabled by false");
+	assertEq(shouldWakeLeaderOnAllEvents({ PI_TEAMS_WAKE_LEADER_ON_ALL_EVENTS: "off" }), false, "wake leader on all events disabled by off");
+
 	// restore env
 	if (prevRoot === undefined) delete process.env.PI_TEAMS_ROOT_DIR;
 	else process.env.PI_TEAMS_ROOT_DIR = prevRoot;
 	if (prevEnabled === undefined) delete process.env.PI_TEAMS_HOOKS_ENABLED;
 	else process.env.PI_TEAMS_HOOKS_ENABLED = prevEnabled;
+	if (prevHooksDir === undefined) delete process.env.PI_TEAMS_HOOKS_DIR;
+	else process.env.PI_TEAMS_HOOKS_DIR = prevHooksDir;
 }
 
 // ── 10. team discovery + attach claims ──────────────────────────────

@@ -55,6 +55,12 @@ export function areTeamsHooksEnabled(env: NodeJS.ProcessEnv = process.env): bool
 	return env.PI_TEAMS_HOOKS_ENABLED === "1";
 }
 
+export function shouldWakeLeaderOnAllEvents(env: NodeJS.ProcessEnv = process.env): boolean {
+	const raw = env.PI_TEAMS_WAKE_LEADER_ON_ALL_EVENTS?.trim().toLowerCase();
+	if (raw === "0" || raw === "false" || raw === "off") return false;
+	return true;
+}
+
 export type TeamsHookFailureAction = "warn" | "followup" | "reopen" | "reopen_followup";
 export type TeamsHookFollowupOwnerPolicy = "member" | "lead" | "none";
 
