@@ -519,6 +519,7 @@ export function runWorker(pi: ExtensionAPI): void {
 		completedTaskId?: string,
 		completedStatus?: "completed" | "failed",
 		failureReason?: string,
+		result?: string,
 	) => {
 		type IdleNotificationPayload = {
 			type: "idle_notification";
@@ -527,6 +528,7 @@ export function runWorker(pi: ExtensionAPI): void {
 			completedTaskId?: string;
 			completedStatus?: "completed" | "failed";
 			failureReason?: string;
+			result?: string;
 		};
 
 		const payload: IdleNotificationPayload = {
@@ -537,6 +539,7 @@ export function runWorker(pi: ExtensionAPI): void {
 		if (completedTaskId) payload.completedTaskId = completedTaskId;
 		if (completedStatus) payload.completedStatus = completedStatus;
 		if (failureReason) payload.failureReason = failureReason;
+		if (result) payload.result = result;
 
 		await writeToMailbox(teamDir, TEAM_MAILBOX_NS, leadName, {
 			from: agentName,
@@ -640,6 +643,7 @@ export function runWorker(pi: ExtensionAPI): void {
 		let completedTaskId: string | undefined;
 		let completedStatus: "completed" | "failed" | undefined;
 		let failureReason: string | undefined;
+		let completedResult: string | undefined;
 
 		try {
 			if (taskId) {
@@ -679,6 +683,7 @@ export function runWorker(pi: ExtensionAPI): void {
 					await completeTask(teamDir, taskListId, taskId, agentName, rawResult);
 					completedTaskId = taskId;
 					completedStatus = "completed";
+					completedResult = rawResult;
 				}
 			}
 		} finally {
@@ -692,7 +697,7 @@ export function runWorker(pi: ExtensionAPI): void {
 
 		// Only tell the leader we're idle if we truly didn't start more work.
 		if (!isStreaming && !currentTaskId) {
-			await sendIdleNotification(completedTaskId, completedStatus, failureReason);
+			await sendIdleNotification(completedTaskId, completedStatus, failureReason, completedResult);
 		}
 	});
 

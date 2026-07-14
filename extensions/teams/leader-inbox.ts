@@ -16,6 +16,32 @@ import { shouldWakeLeaderOnAllEvents, type TeamsHookInvocation } from "./hooks.j
 import type { TeamsStyle } from "./teams-style.js";
 import { formatMemberDisplayName, getTeamsStrings } from "./teams-style.js";
 
+const WAKE_PREVIEW_MAX = 120;
+
+/**
+ * Extract the first line of `s`, trim it, and truncate to `max` chars with an
+ * ellipsis if longer. Mirrors the leader-inbox wake-content contract pinned by
+ * `scripts/integration-wake-result-forward-test.mts`.
+ */
+function truncateFirstLine(s: string, max: number = WAKE_PREVIEW_MAX): string {
+	const firstLine = (s.split(/\r?\n/, 1)[0] ?? "").trim();
+	if (firstLine.length <= max) return firstLine;
+	return firstLine.slice(0, max) + "…";
+}
+
+/**
+ * Build a single-line wake message: `[teams] <summary>` optionally followed by
+ * ` — <truncated preview>`. Matches the contract pinned by the integration
+ * test so leader wake content is consistent across event types.
+ */
+function formatWakeContent(summary: string, preview?: string): string {
+	const head = `[teams] ${summary}`;
+	if (!preview) return head;
+	const truncated = truncateFirstLine(preview);
+	if (!truncated) return head;
+	return `${head} — ${truncated}`;
+}
+
 export async function pollLeaderInbox(opts: {
 	ctx: ExtensionContext;
 	teamId: string;
@@ -216,10 +242,17 @@ export async function pollLeaderInbox(opts: {
 
 				if (idle.completedTaskId && idle.completedStatus === "failed") {
 					ctx.ui.notify(`${name} aborted task #${idle.completedTaskId}`, "warning");
-					wakeLeader?.(`[teams] ${name} FAILED task #${idle.completedTaskId}. Check team results and remediate.`);
+					wakeLeader?.(
+						formatWakeContent(
+							`${name} FAILED task #${idle.completedTaskId}. Check team results and remediate.`,
+							idle.failureReason,
+						),
+					);
 				} else if (idle.completedTaskId) {
 					ctx.ui.notify(`${name} completed task #${idle.completedTaskId}`, "info");
-					wakeLeader?.(`[teams] ${name} completed task #${idle.completedTaskId}. Check team results and proceed.`);
+					wakeLeader?.(
+						formatWakeContent(`${name} completed task #${idle.completedTaskId}`, idle.result),
+					);
 				} else {
 					ctx.ui.notify(`${name} is idle`, "info");
 					if (shouldWakeLeaderOnAllEvents()) {
