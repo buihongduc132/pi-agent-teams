@@ -48,6 +48,7 @@ export function isIdleNotification(
 	completedTaskId?: string;
 	completedStatus?: string;
 	failureReason?: string;
+	result?: string;
 } | null {
 	const obj = safeParseJson(text);
 	if (!isRecord(obj)) return null;
@@ -58,6 +59,7 @@ export function isIdleNotification(
 		completedTaskId: getString(obj, "completedTaskId"),
 		completedStatus: getString(obj, "completedStatus"),
 		failureReason: getString(obj, "failureReason"),
+		result: getString(obj, "result"),
 	};
 }
 
