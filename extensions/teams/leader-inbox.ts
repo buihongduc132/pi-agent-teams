@@ -23,7 +23,7 @@ const WAKE_PREVIEW_MAX = 120;
  * ellipsis if longer. Mirrors the leader-inbox wake-content contract pinned by
  * `scripts/integration-wake-result-forward-test.mts`.
  */
-function truncateFirstLine(s: string, max: number = WAKE_PREVIEW_MAX): string {
+export function truncateFirstLine(s: string, max: number = WAKE_PREVIEW_MAX): string {
 	const firstLine = (s.split(/\r?\n/, 1)[0] ?? "").trim();
 	if (firstLine.length <= max) return firstLine;
 	return firstLine.slice(0, max) + "…";
@@ -34,7 +34,7 @@ function truncateFirstLine(s: string, max: number = WAKE_PREVIEW_MAX): string {
  * ` — <truncated preview>`. Matches the contract pinned by the integration
  * test so leader wake content is consistent across event types.
  */
-function formatWakeContent(summary: string, preview?: string): string {
+export function formatWakeContent(summary: string, preview?: string): string {
 	const head = `[teams] ${summary}`;
 	if (!preview) return head;
 	const truncated = truncateFirstLine(preview);
@@ -107,7 +107,7 @@ export async function pollLeaderInbox(opts: {
 			});
 			ctx.ui.notify(`${formatMemberDisplayName(style, name)} ${strings.shutdownRefusedVerb}: ${rejected.reason}`, "warning");
 			if (shouldWakeLeaderOnAllEvents()) {
-				wakeLeader?.(`[teams] ${name} refused shutdown: ${rejected.reason}`);
+				wakeLeader?.(formatWakeContent(`${name} refused shutdown`, rejected.reason));
 			}
 			continue;
 		}
@@ -123,7 +123,7 @@ export async function pollLeaderInbox(opts: {
 				taskId: planReq.taskId,
 			});
 			if (shouldWakeLeaderOnAllEvents()) {
-				wakeLeader?.(`[teams] ${name} requests plan approval for task ${planReq.taskId ?? "(unassigned)"}. Review and approve/reject via teams tool.`);
+				wakeLeader?.(formatWakeContent(`${name} requests plan approval for task ${planReq.taskId ?? "(unassigned)"}`, planReq.plan));
 			}
 			continue;
 		}
