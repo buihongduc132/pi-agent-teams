@@ -14,6 +14,7 @@ import { getTeamDir } from "./paths.js";
 import { heartbeatTeamAttachClaim, releaseTeamAttachClaim } from "./team-attach-claim.js";
 import { ensureWorktreeCwd } from "./worktree.js";
 import { ActivityTracker, TranscriptTracker } from "./activity-tracker.js";
+import { childSessionIdFromSessionFile } from "./child-usage-sink.js";
 import { getLeaderInboxPollDelayMs, getLeaderRefreshPollDelayMs } from "./adaptive-polling.js";
 import { createDebouncedTrigger } from "./debounce.js";
 import { getWorkerHeartbeatConfig, listStaleWorkerNames } from "./heartbeat-lease.js";
@@ -161,6 +162,23 @@ async function createSessionForTeammate(
 export function runLeader(pi: ExtensionAPI): void {
 	const teammates = new Map<string, TeammateRpc>();
 	const tracker = new ActivityTracker();
+	// child-usage sink: persist worker usage to <agentDir>/child-usage/<id>.json.
+	// Resolver closes over teammates/currentCtx so identity stays fresh per worker.
+	const workerSpawnTimes = new Map<string, number>();
+	tracker.setChildUsageSink((name) => {
+		const t = teammates.get(name);
+		const childSessionId = childSessionIdFromSessionFile(t?.sessionFile);
+		if (!childSessionId) return null;
+		const startedMs = workerSpawnTimes.get(name);
+		const startedAt = startedMs !== undefined
+			? new Date(startedMs).toISOString()
+			: new Date().toISOString();
+		return {
+			childSessionId,
+			parentSessionId: currentCtx?.sessionManager.getSessionId() ?? null,
+			startedAt,
+		};
+	});
 	const transcriptTracker = new TranscriptTracker();
 	const teammateEventUnsubs = new Map<string, () => void>();
 	let currentCtx: ExtensionContext | null = null;
@@ -232,6 +250,8 @@ export function runLeader(pi: ExtensionAPI): void {
 					console.error(`[pi-agent-teams] teammate event unsubscribe error:`, err instanceof Error ? err.message : String(err));
 				}
 				teammateEventUnsubs.delete(name);
+				// Persist terminal usage (endedAt + durationMs) BEFORE resetting state.
+				tracker.persistTerminal(name);
 				tracker.reset(name);
 				transcriptTracker.reset(name);
 
@@ -607,6 +627,8 @@ export function runLeader(pi: ExtensionAPI): void {
 				console.error(`[pi-agent-teams] teammate event unsubscribe error:`, err instanceof Error ? err.message : String(err));
 			}
 			teammateEventUnsubs.delete(name);
+			// Persist terminal usage (endedAt + durationMs) BEFORE resetting state.
+			tracker.persistTerminal(name);
 			tracker.reset(name);
 			transcriptTracker.reset(name);
 
@@ -679,6 +701,9 @@ export function runLeader(pi: ExtensionAPI): void {
 			teammates.delete(name);
 			return { ok: false, error: err instanceof Error ? err.message : String(err) };
 		}
+
+		// Record spawn time for child-usage sink duration accounting.
+		workerSpawnTimes.set(name, Date.now());
 
 		const sessionName = `pi agent teams - ${strings.memberTitle.toLowerCase()} ${name}`;
 
