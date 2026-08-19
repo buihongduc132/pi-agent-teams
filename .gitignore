@@ -53,3 +53,5 @@ sgconfig.yml
 .bug-hunter/
 AGENTS.md
 CLAUDE.md
+
+.worktrees/
