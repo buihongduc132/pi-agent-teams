@@ -1,4 +1,9 @@
 import type { AgentEvent } from "@mariozechner/pi-agent-core";
+import {
+	writeChildUsage,
+	type ChildUsageOwnedFields,
+	type ChildUsageSinkConfig,
+} from "./child-usage-sink.js";
 
 // ── Transcript types ──
 
@@ -174,8 +179,82 @@ function emptyActivity(): TeammateActivity {
 	};
 }
 
+/** Resolves per-worker sink identity; returns null to skip the write. */
+export type ChildUsageSinkResolver = (name: string) => ChildUsageSinkConfig | null;
+
 export class ActivityTracker {
 	private data = new Map<string, TeammateActivity>();
+	private sinkResolver: ChildUsageSinkResolver | null = null;
+
+	/**
+	 * Register a child-usage sink resolver. When set, {@link handleEvent}
+	 * persists current totals on each `agent_end` (turn boundary) and
+	 * {@link persistTerminal} writes terminal lifecycle fields on worker exit.
+	 *
+	 * Safe to leave unset: handleEvent/persistTerminal become no-ops.
+	 */
+	setChildUsageSink(resolver: ChildUsageSinkResolver): void {
+		this.sinkResolver = resolver;
+	}
+
+	/** Persist current totals to the sink (called on agent_end). Never throws. */
+	private persistToSink(name: string): void {
+		if (!this.sinkResolver) return;
+		try {
+			const cfg = this.sinkResolver(name);
+			if (!cfg) return;
+			const a = this.data.get(name);
+			if (!a) return;
+			const owned: ChildUsageOwnedFields = {
+				tokensTotal: a.totalTokens,
+				toolCalls: a.toolUseCount,
+				turns: a.turnCount,
+			};
+			writeChildUsage(cfg, owned);
+		} catch (err) {
+			// Non-blocking: debug-log + swallow. Never break the runtime.
+			try {
+				process.stderr.write(
+					`[pi-agent-teams] child-usage sink persist error: ${err instanceof Error ? err.message : String(err)}\n`,
+				);
+			} catch {
+				// swallow
+			}
+		}
+	}
+
+	/**
+	 * Write terminal lifecycle fields (endedAt + durationMs) for a worker.
+	 * Must be called BEFORE {@link reset} so in-memory totals are still present.
+	 * Never throws.
+	 */
+	persistTerminal(name: string): void {
+		if (!this.sinkResolver) return;
+		try {
+			const cfg = this.sinkResolver(name);
+			if (!cfg) return;
+			const a = this.data.get(name);
+			const now = Date.now();
+			const startedMs = Date.parse(cfg.startedAt);
+			const durationMs = Number.isFinite(startedMs) ? Math.max(0, now - startedMs) : 0;
+			const owned: ChildUsageOwnedFields = {
+				tokensTotal: a?.totalTokens ?? 0,
+				toolCalls: a?.toolUseCount ?? 0,
+				turns: a?.turnCount ?? 0,
+				durationMs,
+				endedAt: new Date(now).toISOString(),
+			};
+			writeChildUsage(cfg, owned, now);
+		} catch (err) {
+			try {
+				process.stderr.write(
+					`[pi-agent-teams] child-usage sink terminal write error: ${err instanceof Error ? err.message : String(err)}\n`,
+				);
+			} catch {
+				// swallow
+			}
+		}
+	}
 
 	handleEvent(name: string, ev: AgentEvent): void {
 		const a = this.getOrCreate(name);
@@ -202,6 +281,7 @@ export class ActivityTracker {
 			a.turnCount++;
 			a.recentEvents.push({ type: ev.type, timestamp: now });
 			if (a.recentEvents.length > MAX_RECENT) a.recentEvents.shift();
+			this.persistToSink(name);
 			return;
 		}
 
